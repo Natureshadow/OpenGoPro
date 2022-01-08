@@ -22,7 +22,7 @@ from open_gopro.ble import (
     BleHandle,
     DisconnectHandlerType,
     NotiHandlerType,
-    AttributeTable,
+    GattDB,
     UUID,
     Descriptor,
     Characteristic,
@@ -31,7 +31,7 @@ from open_gopro.ble import (
 from open_gopro.wifi import WifiClient, WifiController, SsidState
 from open_gopro.ble.adapters.bleak_wrapper import BleakWrapperController
 from open_gopro.responses import GoProResp
-from open_gopro.constants import ErrorCode, ProducerType, CmdId
+from open_gopro.constants import ErrorCode, ProducerType, CmdId, GoProUUIDs
 from open_gopro.communication_client import GoProBle, GoProWifi, GoProResponder
 from open_gopro.api import (
     api_versions,
@@ -132,7 +132,7 @@ def service(characteristic):
 @pytest.fixture()
 def attribute_table(service):
     s = {UUID.S_CONTROL_QUERY: service, UUID.S_CAMERA_MANAGEMENT: service}
-    yield AttributeTable(s)
+    yield GattDB(s)
 
 
 ##############################################################################################################
@@ -361,7 +361,7 @@ class GoProTest(GoPro):
         self._api.ble_command.get_open_gopro_api_version = self._test_return_version
         self._ble.write = self._test_write
         self._ble._controller.disconnect = self._disconnect_handler
-        self._test_response_uuid = UUID.CQ_COMMAND
+        self._test_response_uuid = GoProUUIDs.CQ_COMMAND
         self._test_response_data = bytearray()
 
     def _open_wifi(self, timeout: int = 15, retries: int = 5) -> None:

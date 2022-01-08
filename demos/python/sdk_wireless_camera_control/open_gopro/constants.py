@@ -4,15 +4,52 @@
 """Constant numbers shared across the GoPro module. These do not change across Open GoPro Versions"""
 
 from enum import Enum, EnumMeta
+from dataclasses import dataclass
 from typing import Union, Tuple, Iterator, Type, TypeVar
 
 import construct
 
-from open_gopro.ble import UUID
+from open_gopro.ble import UUID, UUIDs
 
 T = TypeVar("T")
 
 GOPRO_BASE_UUID = "b5f9{}-aa8d-11e3-9046-0002a5d5c51b"
+
+
+@dataclass(frozen=True)
+class GoProUUIDs(UUIDs):
+    """GoPro Proprietary UUID's."""
+
+    # GoPro Wifi Access Point Service
+    S_WIFI_ACCESS_POINT = UUID.from_string(GOPRO_BASE_UUID.format("0001"), "Wifi Access Point Service")
+    WAP_SSID = UUID.from_string(GOPRO_BASE_UUID.format("0002"), "Access Point SSID")
+    WAP_PASSWORD = UUID.from_string(GOPRO_BASE_UUID.format("0003"), "Access Point Password")
+    WAP_POWER = UUID.from_string(GOPRO_BASE_UUID.format("0004"), "Wifi Power")
+    WAP_STATE = UUID.from_string(GOPRO_BASE_UUID.format("0005"), "Wifi State")
+    WAP_CSI_PASSWORD = UUID.from_string(GOPRO_BASE_UUID.format("0006"), "CSI Password")
+
+    # GoPro Control & Query Service
+    S_CONTROL_QUERY = UUID.from_string("0000fea6-0000-1000-8000-00805f9b34fb", "Control and Query Service")
+    CQ_COMMAND = UUID.from_string(GOPRO_BASE_UUID.format("0072"), "Command")
+    CQ_COMMAND_RESP = UUID.from_string(GOPRO_BASE_UUID.format("0073"), "Command Response")
+    CQ_SETTINGS = UUID.from_string(GOPRO_BASE_UUID.format("0074"), "Settings")
+    CQ_SETTINGS_RESP = UUID.from_string(GOPRO_BASE_UUID.format("0075"), "Settings Response")
+    CQ_QUERY = UUID.from_string(GOPRO_BASE_UUID.format("0076"), "Query")
+    CQ_QUERY_RESP = UUID.from_string(GOPRO_BASE_UUID.format("0077"), "Query Response")
+    CQ_SENSOR = UUID.from_string(GOPRO_BASE_UUID.format("0078"), "Sensor")
+    CQ_SENSOR_RESP = UUID.from_string(GOPRO_BASE_UUID.format("0079"), "Sensor Response")
+
+    # GoPro Camera Management Service
+    S_CAMERA_MANAGEMENT = UUID.from_string(GOPRO_BASE_UUID.format("0090"), "Camera Management Service")
+    CM_NET_MGMT_COMM = UUID.from_string(GOPRO_BASE_UUID.format("0091"), "Camera Management")
+    CN_NET_MGMT_RESP = UUID.from_string(GOPRO_BASE_UUID.format("0092"), "Camera Management Response")
+
+    # Unknown
+    S_UNKNOWN = UUID.from_string(GOPRO_BASE_UUID.format("0080"), "Unknown Service")
+    INTERNAL_81 = UUID.from_string(GOPRO_BASE_UUID.format("0081"), "Internal 81")
+    INTERNAL_82 = UUID.from_string(GOPRO_BASE_UUID.format("0082"), "Internal 82")
+    INTERNAL_83 = UUID.from_string(GOPRO_BASE_UUID.format("0083"), "Internal 83")
+    INTERNAL_84 = UUID.from_string(GOPRO_BASE_UUID.format("0084"), "Internal 84")
 
 
 class GoProEnumMeta(EnumMeta):
@@ -45,7 +82,7 @@ class ErrorCode(GoProEnum):
 
 
 class CmdId(GoProEnum):
-    """Command ID's that are written to UUID.CQ_COMMAND."""
+    """Command ID's that are written to GoProUUIDs.CQ_COMMAND."""
 
     SET_SHUTTER = 0x01
     POWER_DOWN = 0x04
@@ -76,7 +113,7 @@ class ActionId(GoProEnum):
 
 
 class SettingId(GoProEnum):
-    """Setting ID's that identify settings and are written to UUID.CQ_SETTINGS."""
+    """Setting ID's that identify settings and are written to GoProUUIDs.CQ_SETTINGS."""
 
     RESOLUTION = 2
     FPS = 3
@@ -174,7 +211,7 @@ class SettingId(GoProEnum):
 
 
 class QueryCmdId(GoProEnum):
-    """Command ID that is written to UUID.CQ_QUERY."""
+    """Command ID that is written to GoProUUIDs.CQ_QUERY."""
 
     GET_SETTING_VAL = 0x12
     GET_STATUS_VAL = 0x13
@@ -194,7 +231,7 @@ class QueryCmdId(GoProEnum):
 
 
 class StatusId(GoProEnum):
-    """Status ID to identify statuses sent to UUID.CQ_QUERY or received from UUID.CQ_QUERY_RESP."""
+    """Status ID to identify statuses sent to GoProUUIDs.CQ_QUERY or received from GoProUUIDs.CQ_QUERY_RESP."""
 
     BATT_PRESENT = 1
     BATT_LEVEL = 2

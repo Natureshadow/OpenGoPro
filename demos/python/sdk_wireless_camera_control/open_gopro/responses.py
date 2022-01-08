@@ -36,6 +36,7 @@ from open_gopro.constants import (
     QueryCmdId,
     ResponseType,
     CmdType,
+    GoProUUIDs,
 )
 from open_gopro.util import scrub
 from open_gopro.ble import UUID
@@ -80,15 +81,15 @@ GEN_LEN_MASK = 0b00011111
 EXT_13_BYTE0_MASK = 0b00011111
 
 id_map: Dict[UUID, Callable] = {
-    UUID.CQ_SETTINGS_RESP: SettingId,
-    UUID.CQ_COMMAND_RESP: CmdId,
-    UUID.CQ_QUERY_RESP: QueryCmdId,
+    GoProUUIDs.CQ_SETTINGS_RESP: SettingId,
+    GoProUUIDs.CQ_COMMAND_RESP: CmdId,
+    GoProUUIDs.CQ_QUERY_RESP: QueryCmdId,
 }
 
 response_map: Dict[UUID, UUID] = {
-    UUID.CQ_SETTINGS: UUID.CQ_SETTINGS_RESP,
-    UUID.CQ_COMMAND: UUID.CQ_COMMAND_RESP,
-    UUID.CQ_QUERY: UUID.CQ_QUERY_RESP,
+    GoProUUIDs.CQ_SETTINGS: GoProUUIDs.CQ_SETTINGS_RESP,
+    GoProUUIDs.CQ_COMMAND: GoProUUIDs.CQ_COMMAND_RESP,
+    GoProUUIDs.CQ_QUERY: GoProUUIDs.CQ_QUERY_RESP,
 }
 
 
@@ -114,14 +115,14 @@ class GoProResp:
     >>> print(response.cmd)
     QueryCmdId.GET_SETTING_VAL
     >>> print(response.uuid)
-    UUID.CQ_QUERY_RESP
+    GoProUUIDs.CQ_QUERY_RESP
 
     Now let's print it as (as JSON):
 
     >>> print(response.data)
     {
         "status": "SUCCESS",
-        "id": "UUID.CQ_QUERY_RESP::QueryCmdId.GET_SETTING_VAL",
+        "id": "GoProUUIDs.CQ_QUERY_RESP::QueryCmdId.GET_SETTING_VAL",
         "SettingId.RESOLUTION": [
             "RES_1080"
         ]
@@ -427,9 +428,9 @@ class GoProResp:
             buf: bytearray = self._raw_packet
 
             # UUID's whose responses contain multiple parameters to parse
-            if self.uuid in [UUID.CQ_QUERY_RESP, UUID.CQ_SETTINGS_RESP]:
+            if self.uuid in [GoProUUIDs.CQ_QUERY_RESP, GoProUUIDs.CQ_SETTINGS_RESP]:
                 identifier: Optional[Type[ResponseType]] = None
-                if self.uuid is UUID.CQ_SETTINGS_RESP:
+                if self.uuid == GoProUUIDs.CQ_SETTINGS_RESP:
                     self._info.append(SettingId(buf[0]))
                     identifier = SettingId
                 else:
@@ -499,7 +500,7 @@ class GoProResp:
                         self.data[param_id] = param_val
 
             else:  # Other UUID's have responses that can be parsed monolithically
-                if self.uuid is UUID.CQ_COMMAND_RESP:
+                if self.uuid == GoProUUIDs.CQ_COMMAND_RESP:
                     self._info.append(CmdId(buf[0]))
                     # If this is a protobuf, first get the action ID (after stripping msb)
                     assert self.cmd is not None

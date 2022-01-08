@@ -18,6 +18,7 @@ from open_gopro.ble import (
     BleClient,
     UUID,
 )
+from open_gopro.ble.client import BleTarget
 from open_gopro.wifi import WifiClient, WifiController
 from open_gopro.responses import GoProResp, ParserMapType, Parser
 from open_gopro.constants import ProducerType, ResponseType
@@ -104,14 +105,14 @@ class GoProBle(ABC, GoProResponder, Generic[BleHandle, BleDevice]):
         controller: BLEController,
         disconnected_cb: DisconnectHandlerType,
         notification_cb: NotiHandlerType,
-        target: Optional[Union[Pattern, BleDevice]],
+        target: BleTarget,
     ) -> None:
         GoProResponder.__init__(self)
         self._ble: BleClient = BleClient(
             controller,
             disconnected_cb,
             notification_cb,
-            re.compile(r"GoPro [A-Z0-9]{4}") if target is None else target,
+            (re.compile(r"GoPro [A-Z0-9]{4}"), target[1]) if target[0] is None else target,
         )
 
     @abstractmethod

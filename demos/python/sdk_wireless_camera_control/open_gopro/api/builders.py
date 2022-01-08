@@ -47,6 +47,7 @@ from open_gopro.constants import (
     QueryCmdId,
     StatusId,
     ErrorCode,
+    GoProUUIDs,
 )
 from open_gopro.communication_client import GoProBle, GoProWifi
 
@@ -455,8 +456,8 @@ class BleSetting(Generic[SettingValueType]):
     ) -> None:
         self.identifier = identifier
         self.communicator: GoProBle = communicator
-        self.setter_uuid: UUID = UUID.CQ_SETTINGS
-        self.reader_uuid: UUID = UUID.CQ_QUERY
+        self.setter_uuid: UUID = GoProUUIDs.CQ_SETTINGS
+        self.reader_uuid: UUID = GoProUUIDs.CQ_QUERY
         self.parser: BytesParser = parser_builder
         self.builder: BytesBuilder = parser_builder  # Just syntactic sugar
         communicator._add_parser(self.identifier, self.parser)
@@ -611,7 +612,7 @@ class BleStatus:
         identifier (StatusId): ID of status
     """
 
-    uuid = UUID.CQ_QUERY
+    uuid: UUID = GoProUUIDs.CQ_QUERY
 
     def __init__(self, communicator: GoProBle, identifier: StatusId, parser: BytesParser) -> None:
         self.identifier = identifier
@@ -641,10 +642,13 @@ class BleStatus:
         Returns:
             GoProResp: current status value
         """
-        self.communicator._register_listener((QueryCmdId.STATUS_VAL_PUSH, self.identifier))
-        return self.communicator._write_characteristic_receive_notification(
-            BleStatus.uuid, self._build_cmd(QueryCmdId.REG_STATUS_VAL_UPDATE)
-        )
+        if (
+            response := self.communicator._write_characteristic_receive_notification(
+                BleStatus.uuid, self._build_cmd(QueryCmdId.REG_STATUS_VAL_UPDATE)
+            )
+        ).is_ok:
+            self.communicator._register_listener((QueryCmdId.STATUS_VAL_PUSH, self.identifier))
+        return response
 
     @log_query
     def unregister_value_update(self) -> GoProResp:
@@ -653,10 +657,13 @@ class BleStatus:
         Returns:
             GoProResp: Status of unregister
         """
-        self.communicator._unregister_listener((QueryCmdId.STATUS_VAL_PUSH, self.identifier))
-        return self.communicator._write_characteristic_receive_notification(
-            BleStatus.uuid, self._build_cmd(QueryCmdId.UNREG_STATUS_VAL_UPDATE)
-        )
+        if (
+            response := self.communicator._write_characteristic_receive_notification(
+                BleStatus.uuid, self._build_cmd(QueryCmdId.UNREG_STATUS_VAL_UPDATE)
+            )
+        ).is_ok:
+            self.communicator._unregister_listener((QueryCmdId.STATUS_VAL_PUSH, self.identifier))
+        return response
 
     def _build_cmd(self, cmd: QueryCmdId) -> bytearray:
         """Build the data for a given status command.

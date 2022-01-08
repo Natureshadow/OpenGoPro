@@ -5,9 +5,9 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Callable, Generic, Pattern, TypeVar
+from typing import Callable, Generic, Pattern, TypeVar, Type, Optional, List, Tuple, Union
 
-from .services import AttributeTable
+from .services import GattDB, UUID, UUIDs
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class BLEController(ABC, Generic[BleDevice, BleHandle]):
     """Interface definition for a BLE driver to be used by GoPro."""
 
     @abstractmethod
-    def read(self, handle: BleHandle, uuid: str) -> bytearray:
+    def read(self, handle: BleHandle, uuid: UUID) -> bytearray:
         """Read a bytestream response from a UUID.
 
         Args:
@@ -34,7 +34,7 @@ class BLEController(ABC, Generic[BleDevice, BleHandle]):
         raise NotImplementedError
 
     @abstractmethod
-    def write(self, handle: BleHandle, uuid: str, data: bytearray) -> None:
+    def write(self, handle: BleHandle, uuid: UUID, data: bytearray) -> None:
         """Write a bytestream to a UUID.
 
         Args:
@@ -48,7 +48,7 @@ class BLEController(ABC, Generic[BleDevice, BleHandle]):
         raise NotImplementedError
 
     @abstractmethod
-    def scan(self, token: Pattern, timeout: int = 5) -> BleDevice:
+    def scan(self, token: Pattern, timeout: int = 5, service_uuids: List[UUID] = None) -> BleDevice:
         """Scan BLE device with a regex in it's device name.
 
         Args:
@@ -100,14 +100,14 @@ class BLEController(ABC, Generic[BleDevice, BleHandle]):
         raise NotImplementedError
 
     @abstractmethod
-    def discover_chars(self, handle: BleHandle) -> AttributeTable:
+    def discover_chars(self, handle: BleHandle, uuids: Type[UUIDs] = None) -> GattDB:
         """Discover all characteristics for a connected handle.
 
         Args:
             handle (BleHandle): handle to discover on
 
         Returns:
-            BleHandle: handle with updated gatt_table attribute
+            BleHandle: handle with updated gatt_db attribute
         """
         raise NotImplementedError
 
