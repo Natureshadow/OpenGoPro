@@ -7,7 +7,7 @@ import re
 import logging
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Generic, Union, Pattern, Optional
+from typing import Generic, Optional
 
 from open_gopro.ble import (
     BleDevice,

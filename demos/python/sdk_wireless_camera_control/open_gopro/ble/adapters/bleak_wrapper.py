@@ -8,7 +8,6 @@ import logging
 import threading
 from typing import Pattern, Dict, Any, Callable, Optional, List, Type
 
-import wrapt
 from bleak import BleakScanner, BleakClient
 from bleak.backends.device import BLEDevice as BleakDevice
 
@@ -119,11 +118,14 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
         self._as_coroutine(_async_write)
 
     def scan(self, token: Pattern, timeout: int = 5, service_uuids: List[UUID] = None) -> BleakDevice:
-        """scan for a regex.
+        """Scan for a regex in advertising data strings, optionally filtering on service UUID's
+
+        Warning! Mac OS >= 12 requires service_uuids to be not None
 
         Args:
             token (Pattern): Regex to look for when scanning.
             timeout (int, optional): Time to scan. Defaults to 5.
+            service_uuids (List[UUID], optional): The list of UUID's to filter on. Defaults to None.
 
         Raises:
             FailedToFindDevice: Did not find any of the token when scanning.
@@ -251,16 +253,29 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
         self._as_coroutine(_async_enable_notifications)
 
     def discover_chars(self, handle: BleakClient, uuids: Type[UUIDs] = None) -> GattDB:
-        """discover all characteristics.
+        """Discover all characteristics for a connected handle.
+
+        By default, the BLE controller only knows Spec-Defined UUID's so any additional UUID's should
+        be passed in with the uuids argument
 
         Args:
-            handle (BleakClient): Device to perform discovery on
+            handle (BleHandle): BLE handle to discover for
+            uuids (Type[UUIDs], optional): Additional UUID information to use when building the
+                Gatt Database. Defaults to None.
 
         Returns:
-            GattDB: Dict of services by UUID
+            GattDB: Gatt Database
         """
 
         def bleak_props_adapter(bleak_props: List[str]) -> CharProps:
+            """Convert a list of bleak string properties into a CharProps
+
+            Args:
+                bleak_props (List[str]): bleak strings to convert
+
+            Returns:
+                CharProps: converted Enum
+            """
             props = CharProps.NONE
             for prop in bleak_props:
                 props |= bleak_props_to_enum[prop]
@@ -320,7 +335,7 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
         return self._as_coroutine(_async_discover_chars)
 
     def disconnect(self, handle: BleakClient) -> None:
-        """terminate a BLE connection.
+        """Terminate a BLE connection.
 
         Args:
             handle (BleakClient): client to disconnect from

@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 BleTarget = Tuple[Union[Pattern, BleDevice], Optional[List[UUID]]]
 
+
 class BleClient(Generic[BleHandle, BleDevice]):
     """A BLE client that is composed of, among other things, a BLE interface
 
@@ -39,13 +40,13 @@ class BleClient(Generic[BleHandle, BleDevice]):
     ) -> None:
         if target is None:
             raise ValueError("Target can not be None!")
-        if isinstance(target, str):
-            # TODO is there a way to check if target is BleDevice?
-            target = re.compile(target)
+        if isinstance(target[0], str):
+            self._target = (re.compile(target[0]), target[1])
+        else:
+            self._target = target
         self._controller = controller
         self._disconnected_cb = disconnected_cb
         self._notification_cb = notification_cb
-        self._target = target
         self._gatt_table: Optional[GattDB] = None
         self._device: Optional[BleDevice] = None
         self._handle: Optional[BleHandle] = None
@@ -73,13 +74,18 @@ class BleClient(Generic[BleHandle, BleDevice]):
         Args:
             timeout (int, optional): How long to try connecting (in seconds) before retrying. Defaults to 10.
             retries(int, optional): How many retries to attempt before giving up. Defaults to 5
+            uuids (Type[UUIDs], optional): Service UUID's to filter on when scanning. Defaults to None.
+
+        Raises:
+            ConnectFailed: The BLE connection was not able to establish
         """
+
         # If we need we need to find the device to connect
         if isinstance(self._target[0], Pattern):
             self._find_device()
         # Otherwise we already have it
         else:
-            self._device = self._target[0]
+            self._device = self._target[0]  # type: ignore
         self._identifier = str(self._device)
 
         logger.info("Establishing the BLE connection")
@@ -188,7 +194,7 @@ class BleClient(Generic[BleHandle, BleDevice]):
                 w.writerow(["SERVICE", s.name, s.uuid.value, "SERVICE", "SERVICE"])
                 # For each characteristic in service
                 for c in s.chars.values():
-                    w.writerow([c.handle, c.name, c.uuid.value, " ".join(c.props), c.value])
+                    w.writerow([c.handle, c.name, c.uuid.value, c.props, c.value])
                     # For each descriptor in characteristic
-                    for d in c.descriptors:
+                    for d in c.descriptors.values():
                         w.writerow([d.handle, "DESCRIPTOR", "", "", d.value])

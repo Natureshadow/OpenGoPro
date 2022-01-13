@@ -8,15 +8,16 @@ import csv
 import json
 import logging
 from pathlib import Path
-from collections import Mapping
-from enum import Enum, IntFlag, IntEnum
+from enum import IntFlag, IntEnum
 from dataclasses import dataclass, field, asdict
-from typing import Dict, Iterator, Generator, List, Mapping, Optional, Union, Tuple, Type
+from typing import Dict, Iterator, Generator, Mapping, Optional, Tuple, Type, no_type_check
 
 logger = logging.getLogger(__name__)
 
 
 class CharProps(IntFlag):
+    """BLE Spec-Defined Characteristic Property bitmask values"""
+
     NONE = 0x00
     BROADCAST = 0x01
     READ = 0x02
@@ -31,6 +32,8 @@ class CharProps(IntFlag):
 
 
 class SpecUuidNumber(IntEnum):
+    """BLE Spec-Defined UUID Number values as ints"""
+
     PRIMARY_SERVICE = 0x2800
     SECONDARY_SERVICE = 0x2801
     INCLUDE = 0x2802
@@ -43,60 +46,102 @@ class SpecUuidNumber(IntEnum):
     CHAR_AGGREGATE_FORMAT = 0x2905
 
 
-class UuidFormat(IntEnum):
-    TWO_BYTE = 2
-    SIXTEEN_BYTE = 16
+class UuidLength(IntEnum):
+    """Used to specify 8-bit or 128-bit UUIDs"""
+
+    BIT_8 = 2
+    BIT_128 = 16
 
 
+# TODO use python UUID
 @dataclass
 class UUID:
+    """Used to identify BLE UUID's
+
+    Can be built from and represented as int or string
+    """
+
     value: bytes
     name: str = ""
 
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # pylint: disable=missing-return-doc
         return self.as_string if self.name == "" else self.name
 
-    def __repr__(self) -> str:
+    def __repr__(self) -> str:  # pylint: disable=missing-return-doc
         return self.__str__()
 
-    def __hash__(self):
+    def __hash__(self) -> int:  # pylint: disable=missing-return-doc
         return hash(self.value)
 
-    def __eq__(self, other: Union["UUID", int, bytes, str, IntEnum, Enum]) -> bool:
+    def __eq__(self, other: object) -> bool:  # pylint: disable=missing-return-doc
         if isinstance(other, UUID):
             return self.value == other.value
-        elif isinstance(other, int):
+        if isinstance(other, int):
             return self.as_int == other
-        elif isinstance(other, bytes):
+        if isinstance(other, bytes):
             return self.value == other
-        elif isinstance(other, str):
+        if isinstance(other, str):
             return self.as_string.replace(":", "").lower() == other.lower()
-        else:
-            return False
+        return False
 
     @property
     def as_int(self) -> int:
+        """Display the UUID as an int
+
+        Returns:
+            int: int representation of the UUID
+        """
         return int.from_bytes(self.value, "big")
 
     @property
     def as_string(self) -> str:
+        """Display the UUID as a string (i.e. 0000fea6-0000-1000-8000-00805f9b34fb)
+
+        Returns:
+            str: string representation of UUID
+        """
         return f"{self.value.hex()[:8]}-{self.value.hex()[8:12]}-{self.value.hex()[12:16]}-{self.value.hex()[16:20]}-{self.value.hex()[20:]}"
 
     @classmethod
-    def from_int(cls, uuid: int, format: UuidFormat, name="") -> "UUID":
-        return cls(int.to_bytes(uuid, format, "big"), name)
+    def from_int(cls, uuid: int, length: UuidLength, name: str = "") -> UUID:
+        """Build a UUID from an int
+
+        Args:
+            uuid (int) : the int to build from
+            length (UuidLength): size of UUID to build (8 or 128 bit)
+            name (str, optional): name of UUID. Defaults to "".
+
+        Returns:
+            UUID: instantiated UUID
+        """
+        return cls(int.to_bytes(uuid, length, "big"), name)
 
     @classmethod
-    def normalize(cls, uuid: str) -> str:
-        return uuid.replace(":", "").replace("-", "")
+    def from_string(cls, uuid: str, name: str = "") -> UUID:
+        """Build a UUID from a string
 
-    @classmethod
-    def from_string(cls, uuid: str, name="") -> "UUID":
+        The input string will be normalized to remove ":" and "-" characters
+
+        Args:
+            uuid (str): input UUID
+            name (str, optional): name of UUID. Defaults to "".
+
+        Returns:
+            UUID: instantiated UUID
+        """
         return cls(bytes.fromhex(UUID.normalize(uuid)), name)
 
     @classmethod
-    def from_enum(cls, uuid: Enum) -> "UUID":
-        return cls(uuid.value, str(uuid))
+    def normalize(cls, uuid: str) -> str:
+        """Remove ":" and "-" characters
+
+        Args:
+            uuid (str): input UUID
+
+        Returns:
+            str: normalized string
+        """
+        return uuid.replace(":", "").replace("-", "")
 
 
 @dataclass
@@ -142,37 +187,73 @@ class Characteristic:
         if self.uuid.name == "":
             self.uuid.name = self.name
 
-
     def __str__(self) -> str:  # pylint: disable=missing-return-doc
         return f"UUID {str(self.uuid)} @ handle {self.handle}: {self.props}"
 
     @property
     def is_readable(self) -> bool:
+        """Does this characteric have readable property?
+
+        Returns:
+            bool: True if readable, False if not
+        """
         return CharProps.NOTIFY in self.props
 
     @property
     def is_writeable_with_response(self) -> bool:
+        """Does this characteric have writeable-with-response property?
+
+        Returns:
+            bool: True if writeable-with-response, False if not
+        """
         return CharProps.WRITE_YES_RSP in self.props
 
     @property
     def is_writeable_without_response(self) -> bool:
+        """Does this characteric have writeable-without-response property?
+
+        Returns:
+            bool: True if writeable-without-response, False if not
+        """
         return CharProps.WRITE_NO_RSP in self.props
 
     @property
     def is_writeable(self) -> bool:
+        """Does this characteric have writeable property?
+
+        That is, does it have writeable-with-response or writeable-without-response property
+
+        Returns:
+            bool: True if writeable, False if not
+        """
         return self.is_writeable_with_response or self.is_writeable_without_response
 
     @property
     def is_notifiable(self) -> bool:
+        """Does this characteric have notifiable property?
+
+        Returns:
+            bool: True if notifiable, False if not
+        """
         return CharProps.NOTIFY in self.props
 
     @property
     def is_indicatable(self) -> bool:
+        """Does this characteric have indicatable property?
+
+        Returns:
+            bool: True if indicatable, False if not
+        """
         return CharProps.INDICATE in self.props
 
     @property
     def cccd_handle(self) -> int:
-        return self.descriptors[UUID.from_int(SpecUuidNumber.CLIENT_CHAR_CONFIG, UuidFormat.TWO_BYTE)].handle
+        """What is this characteristics CCCD (client characteristic configuration descriptor) handle
+
+        Returns:
+            int: the CCCD handle
+        """
+        return self.descriptors[UUID.from_int(SpecUuidNumber.CLIENT_CHAR_CONFIG, UuidLength.BIT_8)].handle
 
 
 @dataclass
@@ -204,35 +285,36 @@ class GattDB:
         characteristics (Dict[UUID, Characteristic]): A dictionary of Characteristics indexed by UUID.
     """
 
+    # TODO fix typing here
     class CharacteristicView(Mapping):
-        def __init__(self, db: "GattDB"):
+        """Represent the GattDB mapping as characteristics indexed by UUID"""
+
+        def __init__(self, db: "GattDB") -> None:
             self._db = db
 
-        def __getitem__(self, key: UUID):
+        def __getitem__(self, key: UUID) -> Characteristic:  # pylint: disable=missing-return-doc
             for service in self._db.services.values():
                 for char in service.chars.values():
                     if char.uuid == key:
                         return char
             raise KeyError
 
-        def __contains__(self, key):
+        def __contains__(self, key: object) -> bool:  # pylint: disable=missing-return-doc
             for service in self._db.services.values():
                 for char in service.chars.values():
                     if char.uuid == key:
                         return True
             return False
 
-        def __iter__(self) -> Iterator[UUID]:
-            # keys = []
-            # for service in self._db.services.values():
-            #     keys.extend(service.chars.keys())
-            # return iter(keys)
-            return self.keys()
+        @no_type_check
+        def __iter__(self) -> Iterator[UUID]:  # pylint: disable=missing-return-doc
+            return iter(self.keys())
 
-        def __len__(self):
+        def __len__(self) -> int:  # pylint: disable=missing-return-doc
             return sum(len(service.chars) for service in self._db.services.values())
 
-        def keys(self) -> Generator[UUID, None, None]:
+        @no_type_check
+        def keys(self) -> Generator[UUID, None, None]:  # pylint: disable=missing-return-doc
             def iter_keys():
                 for service in self._db.services.values():
                     for uuid in service.chars.keys():
@@ -240,7 +322,8 @@ class GattDB:
 
             return iter_keys()
 
-        def values(self) -> Generator[Characteristic, None, None]:
+        @no_type_check
+        def values(self) -> Generator[Characteristic, None, None]:  # pylint: disable=missing-return-doc
             def iter_values():
                 for service in self._db.services.values():
                     for char in service.chars.values():
@@ -248,7 +331,10 @@ class GattDB:
 
             return iter_values()
 
-        def items(self) -> Generator[Tuple[UUID, Characteristic], None, None]:
+        @no_type_check
+        def items(  # pylint: disable=missing-return-doc
+            self,
+        ) -> Generator[Tuple[UUID, Characteristic], None, None]:
             def iter_items():
                 for service in self._db.services.values():
                     for uuid, char in service.chars.items():
@@ -262,10 +348,13 @@ class GattDB:
 
     def handle2uuid(self, handle: int) -> UUID:
         """Get a UUID from a handle.
+
         Args:
             handle (int): the handle to search for
+
         Raises:
-            Exception: No characteristic was found at this handle
+            KeyError: No characteristic was found at this handle
+
         Returns:
             UUID: The found UUID
         """
@@ -273,9 +362,20 @@ class GattDB:
             for c in s.chars.values():
                 if c.handle == handle:
                     return c.uuid
-        raise Exception(f"Matching UUID not found for handle {handle}")
+        raise KeyError(f"Matching UUID not found for handle {handle}")
 
     def uuid2handle(self, uuid: UUID) -> int:
+        """Convert a handle to a UUID
+
+        Args:
+            uuid (UUID): UUID to translate
+
+        Returns:
+            int: the handle in the Gatt Database where this UUID resides
+
+        Raises:
+            KeyError: This UUID does not exist in the Gatt database
+        """
         return self.characteristics[uuid].handle
 
     def dump_to_csv(self, file: Path = Path("attributes.csv")) -> None:
@@ -287,10 +387,10 @@ class GattDB:
             logger.debug(f"Dumping discovered BLE characteristics to {file}")
 
             w = csv.writer(f, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            w.writerow(["handle", "description", "UUID", "properties", "value"])
+            w.writerow(["handle", "description", UUID, "properties", "value"])
 
             # For each service in table
-            for service in self.services.values():  # type: ignore
+            for service in self.services.values():
                 desc = "unknown" if service.name == "" else service.name
                 w.writerow(
                     [
@@ -310,29 +410,37 @@ class GattDB:
                     w.writerow([char.handle, description, char.uuid.as_string, "", char.value])
                     # For each descriptor in characteristic
                     for descriptor in char.descriptors.values():
-                        description = SpecUuidNumber(descriptor.uuid.as_int)
+                        description = SpecUuidNumber(descriptor.uuid.as_int).name
                         w.writerow(
                             [descriptor.handle, description, descriptor.uuid.as_string, "", descriptor.value]
                         )
 
 
 class UUIDsMeta(type):
-    def __new__(cls, name, bases, dct):
+    """The metaclass used to build a UUIDs container
+
+    Upon creation of a new UUIDs class, this will store the UUID names in an internal mapping indexed by UUID
+    """
+
+    @no_type_check
+    def __new__(cls, name, bases, dct) -> UUIDsMeta:  # pylint: disable=missing-return-doc
         x = super().__new__(cls, name, bases, dct)
-        x._uuids: Dict[uuid, str] = {}
-        uuid: UUID
+        x._uuids = {}
         for _, uuid in [(k, v) for k, v in dct.items() if not k.startswith("__")]:
             x._uuids[uuid] = uuid.name
         return x
 
-    def __getitem__(self, key: UUID) -> str:
-        return self._uuids[key]
+    @no_type_check
+    def __getitem__(cls, key: UUID) -> str:  # pylint: disable=missing-return-doc
+        return cls._uuids[key]
 
-    def __contains__(self, uuid: UUID) -> bool:
-        return uuid in self._uuids.keys()
+    @no_type_check
+    def __contains__(cls, uuid: UUID) -> bool:  # pylint: disable=missing-return-doc
+        return uuid in cls._uuids.keys()
 
-    def __iter__(self):
-        for item in self._uuids.items():
+    @no_type_check
+    def __iter__(cls):  # pylint: disable=missing-return-doc
+        for item in cls._uuids.items():
             yield item
 
 
@@ -340,6 +448,7 @@ class UUIDsMeta(type):
 class UUIDs(metaclass=UUIDsMeta):
     """BLE Spec-defined UUIDs that are common across all applications."""
 
+    @no_type_check
     def __new__(cls: Type[UUIDs]) -> Type[UUIDs]:
         raise Exception("This class shall not be instantiated")
 

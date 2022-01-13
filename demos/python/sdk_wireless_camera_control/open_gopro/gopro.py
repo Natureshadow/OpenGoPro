@@ -646,7 +646,7 @@ class GoPro(GoProBle, GoProWifi, Generic[BleDevice]):
 
         return response
 
-    def _read_characteristic(self, uuid: GoProUUIDs) -> GoProResp:
+    def _read_characteristic(self, uuid: UUID) -> GoProResp:
         """Read a characteristic's data by GoProUUIDs.
 
         There should hopefully not be a scenario where this needs to be called directly as it is generally
@@ -666,7 +666,7 @@ class GoPro(GoProBle, GoProWifi, Generic[BleDevice]):
             logger.debug(f"{uuid} has the semaphore")
             have_semaphore = True
 
-        received_data = self._ble.read(uuid.value)
+        received_data = self._ble.read(uuid)
 
         if self._maintain_ble and have_semaphore:
             self._ready.release()
