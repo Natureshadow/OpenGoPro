@@ -21,7 +21,7 @@ from open_gopro.ble import (
     BLEController,
     NotiHandlerType,
     FailedToFindDevice,
-    UUID,
+    BleUUID,
     UUIDs,
     CharProps,
 )
@@ -79,12 +79,12 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
         # Allow timeout exception to propagate
         return asyncio.run_coroutine_threadsafe(action(), self._module_loop).result(timeout)
 
-    def read(self, handle: BleakClient, uuid: UUID) -> bytearray:
-        """read data from a UUID.
+    def read(self, handle: BleakClient, uuid: BleUUID) -> bytearray:
+        """read data from a BleUUID.
 
         Args:
             handle (BleakClient): client to read from
-            uuid (UUID): uuid to read
+            uuid (BleUUID): uuid to read
 
         Returns:
             bytearray: read data
@@ -92,24 +92,23 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
 
         async def _async_read() -> bytearray:  # pylint: disable=missing-return-doc
             logger.debug(f"Reading from {uuid}")
-            response = await handle.read_gatt_char(uuid.as_string)
-            logger.debug(f'Received response on UUID [{uuid}]: {response.hex( ":")}')
+            response = await handle.read_gatt_char(uuid.hex)
+            logger.debug(f'Received response on BleUUID [{uuid}]: {response.hex( ":")}')
             return response
 
         return self._as_coroutine(_async_read)
 
-    def write(self, handle: BleakClient, uuid: UUID, data: bytearray) -> None:
-        """Write data to a UUID.
+    def write(self, handle: BleakClient, uuid: BleUUID, data: bytearray) -> None:
+        """Write data to a BleUUID.
 
         Args:
             handle (BleakClient): Device to write to
-            uuid (UUID): characteristic UUID to write to
+            uuid (BleUUID): characteristic BleUUID to write to
             data (bytearray): data to write
         """
 
         async def _async_write() -> None:
-            # TODO convert to using standard uuid.UUID
-            bleak_uuid = UUID.normalize(uuid.as_string)
+            bleak_uuid = uuid.hex
             bleak_uuid = f"{bleak_uuid[:8]}-{bleak_uuid[8:12]}-{bleak_uuid[12:16]}-{bleak_uuid[16:20]}-{bleak_uuid[20:]}"
             logger.debug(f"Writing to {uuid}: {data.hex(':')}")
             # TODO make with / without response configurable
@@ -117,15 +116,15 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
 
         self._as_coroutine(_async_write)
 
-    def scan(self, token: Pattern, timeout: int = 5, service_uuids: List[UUID] = None) -> BleakDevice:
-        """Scan for a regex in advertising data strings, optionally filtering on service UUID's
+    def scan(self, token: Pattern, timeout: int = 5, service_uuids: List[BleUUID] = None) -> BleakDevice:
+        """Scan for a regex in advertising data strings, optionally filtering on service BleUUID's
 
         Warning! Mac OS >= 12 requires service_uuids to be not None
 
         Args:
             token (Pattern): Regex to look for when scanning.
             timeout (int, optional): Time to scan. Defaults to 5.
-            service_uuids (List[UUID], optional): The list of UUID's to filter on. Defaults to None.
+            service_uuids (List[BleUUID], optional): The list of BleUUID's to filter on. Defaults to None.
 
         Raises:
             FailedToFindDevice: Did not find any of the token when scanning.
@@ -137,7 +136,7 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
         async def _async_scan() -> BleakDevice:  # pylint: disable=missing-return-doc
             logger.info(f"Scanning for {token.pattern} bluetooth devices...")
             devices: Dict[str, BleakDevice] = {}
-            uuids = [] if service_uuids is None else [x.as_string for x in service_uuids]
+            uuids = [] if service_uuids is None else [x.hex for x in service_uuids]
 
             def _scan_callback(device: BleakDevice, _: Any) -> None:
                 """Bleak optional scan callback to receive every scan result.
@@ -255,12 +254,12 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
     def discover_chars(self, handle: BleakClient, uuids: Type[UUIDs] = None) -> GattDB:
         """Discover all characteristics for a connected handle.
 
-        By default, the BLE controller only knows Spec-Defined UUID's so any additional UUID's should
+        By default, the BLE controller only knows Spec-Defined BleUUID's so any additional BleUUID's should
         be passed in with the uuids argument
 
         Args:
             handle (BleHandle): BLE handle to discover for
-            uuids (Type[UUIDs], optional): Additional UUID information to use when building the
+            uuids (Type[UUIDs], optional): Additional BleUUID information to use when building the
                 Gatt Database. Defaults to None.
 
         Returns:
@@ -283,45 +282,41 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
 
         async def _async_discover_chars() -> GattDB:  # pylint: disable=missing-return-doc
             logger.info("Discovering characteristics...")
-            services: Dict[UUID, Service] = {}
+            services: Dict[BleUUID, Service] = {}
 
             for service in handle.services:
                 # Create new service
-                service_uuid = UUID.from_string(service.uuid)
+                service_uuid = uuids[service.uuid] if uuids else BleUUID(service.description, hex=service.uuid)
                 logger.debug(f"[Service] {service_uuid}")
-                services[service_uuid] = Service(
-                    uuid=service_uuid,
-                    start_handle=service.handle,
-                    name=uuids[service_uuid]
-                    if uuids is not None and service_uuid in uuids
-                    else service.description,
-                )
+                services[service_uuid] = Service(service_uuid, service.handle, service_uuid.name)
 
                 # Loop over all chars in service
-                chars: Dict[UUID, Characteristic] = {}
+                chars: Dict[BleUUID, Characteristic] = {}
                 for char in service.characteristics:
                     # Get any descriptors if they exist
-                    descriptors: Dict[UUID, Descriptor] = {}
+                    descriptors: Dict[BleUUID, Descriptor] = {}
                     for descriptor in char.descriptors:
-                        decsriptor_uuid = UUID.from_string(descriptor.uuid, descriptor.description)
+                        descriptor_uuid = (
+                            uuids[descriptor.uuid]
+                            if uuids
+                            else BleUUID(descriptor.description, hex=descriptor.uuid)
+                        )
                         descriptor_value = await handle.read_gatt_descriptor(descriptor.handle)
-                        descriptors[decsriptor_uuid] = Descriptor(
-                            descriptor.handle, decsriptor_uuid, descriptor_value
+                        descriptors[descriptor_uuid] = Descriptor(
+                            descriptor.handle, descriptor_uuid, descriptor_value
                         )
                     # Read char if applicable
                     char_value = (
                         bytes(await handle.read_gatt_char(char.uuid)) if "read" in char.properties else b""
                     )
                     # Add characteristic to char dic
-                    char_uuid = UUID.from_string(char.uuid)
+                    char_uuid = uuids[char.uuid] if uuids else BleUUID(char.description, hex=char.uuid)
                     chars[char_uuid] = Characteristic(
                         handle=char.handle,
                         descriptor_handle=char.handle + 1,
                         uuid=char_uuid,
                         props=bleak_props_adapter(char.properties),
-                        name=uuids[char_uuid]
-                        if uuids is not None and char_uuid in uuids
-                        else char.description,
+                        name=char_uuid.name,
                         value=char_value,
                         descriptors=descriptors,
                     )

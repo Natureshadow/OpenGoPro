@@ -39,7 +39,7 @@ from open_gopro.constants import (
     GoProUUIDs,
 )
 from open_gopro.util import scrub
-from open_gopro.ble import UUID
+from open_gopro.ble import BleUUID
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +80,13 @@ HDR_MASK = 0b01100000
 GEN_LEN_MASK = 0b00011111
 EXT_13_BYTE0_MASK = 0b00011111
 
-id_map: Dict[UUID, Callable] = {
+id_map: Dict[BleUUID, Callable] = {
     GoProUUIDs.CQ_SETTINGS_RESP: SettingId,
     GoProUUIDs.CQ_COMMAND_RESP: CmdId,
     GoProUUIDs.CQ_QUERY_RESP: QueryCmdId,
 }
 
-response_map: Dict[UUID, UUID] = {
+response_map: Dict[BleUUID, BleUUID] = {
     GoProUUIDs.CQ_SETTINGS: GoProUUIDs.CQ_SETTINGS_RESP,
     GoProUUIDs.CQ_COMMAND: GoProUUIDs.CQ_COMMAND_RESP,
     GoProUUIDs.CQ_QUERY: GoProUUIDs.CQ_QUERY_RESP,
@@ -170,14 +170,14 @@ class GoProResp:
         self._state: GoProResp._State = GoProResp._State.INITIALIZED
 
     @classmethod
-    def _from_write_command(cls, parsers: ParserMapType, uuid: UUID, data: bytes) -> "GoProResp":
+    def _from_write_command(cls, parsers: ParserMapType, uuid: BleUUID, data: bytes) -> "GoProResp":
         """Build a GoProResp from a write command.
 
-        This will discover the expected response UUID from the command UUID as well as parse the ID
+        This will discover the expected response BleUUID from the command BleUUID as well as parse the ID
         from the bytestream.
 
         Args:
-            uuid (UUID): UUID that write command is writing to
+            uuid (BleUUID): BleUUID that write command is writing to
             data (bytes): bytestream of the command
 
         Returns:
@@ -193,11 +193,11 @@ class GoProResp:
         return cls(parsers, info=info)
 
     @classmethod
-    def _from_read_response(cls, parsers: ParserMapType, uuid: UUID, data: bytearray) -> "GoProResp":
+    def _from_read_response(cls, parsers: ParserMapType, uuid: BleUUID, data: bytearray) -> "GoProResp":
         """Build a GoProResp from a read response.
 
         Args:
-            uuid (UUID): UUID that read command was received from
+            uuid (BleUUID): BleUUID that read command was received from
             data (bytes): received bytestream
 
         Returns:
@@ -303,7 +303,7 @@ class GoProResp:
 
         Will vary depending on what type of response this is:
 
-        - for a direct BLE read / write to a characteristic, it will be a :py:class:`open_gopro.constants.UUID`
+        - for a direct BLE read / write to a characteristic, it will be a :py:class:`open_gopro.constants.BleUUID`
         - for a BLE command response, it will be a :py:class:`open_gopro.constants.CmdType`
         - for a BLE setting / status response / update, it will be a :py:class:`open_gopro.constants.SettingId` or :py:class:`open_gopro.constants.StatusId`
         - for an HTTP response, it will be a string of the HTTP endpoint
@@ -328,16 +328,16 @@ class GoProResp:
         return None
 
     @property
-    def uuid(self) -> Optional[UUID]:
-        """Attempt to get the UUID the response was received on.
+    def uuid(self) -> Optional[BleUUID]:
+        """Attempt to get the BleUUID the response was received on.
 
-        If the response is not a BLE response, it won't have a UUID.
+        If the response is not a BLE response, it won't have a BleUUID.
 
         Returns:
-            Optional[UUID]: UUID if relevant, otherwise None
+            Optional[BleUUID]: BleUUID if relevant, otherwise None
         """
         for x in self._info:
-            if isinstance(x, UUID):
+            if isinstance(x, BleUUID):
                 return x
         return None
 
@@ -427,7 +427,7 @@ class GoProResp:
         if isinstance(self._raw_packet, bytearray):
             buf: bytearray = self._raw_packet
 
-            # UUID's whose responses contain multiple parameters to parse
+            # BleUUID's whose responses contain multiple parameters to parse
             if self.uuid in [GoProUUIDs.CQ_QUERY_RESP, GoProUUIDs.CQ_SETTINGS_RESP]:
                 identifier: Optional[Type[ResponseType]] = None
                 if self.uuid == GoProUUIDs.CQ_SETTINGS_RESP:
@@ -499,7 +499,7 @@ class GoProResp:
                         logger.warning(f"{param_id} does not contain a value {param_val}")
                         self.data[param_id] = param_val
 
-            else:  # Other UUID's have responses that can be parsed monolithically
+            else:  # Other BleUUID's have responses that can be parsed monolithically
                 if self.uuid == GoProUUIDs.CQ_COMMAND_RESP:
                     self._info.append(CmdId(buf[0]))
                     # If this is a protobuf, first get the action ID (after stripping msb)

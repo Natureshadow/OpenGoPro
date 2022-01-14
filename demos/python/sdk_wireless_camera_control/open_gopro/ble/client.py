@@ -9,7 +9,7 @@ import logging
 from pathlib import Path
 from typing import Generic, Optional, Union, Pattern, Type, Tuple, List
 
-from open_gopro.ble import UUID
+from open_gopro.ble import BleUUID
 from open_gopro.exceptions import FailedToFindDevice, ConnectFailed
 from .controller import (
     BLEController,
@@ -18,11 +18,11 @@ from .controller import (
     DisconnectHandlerType,
     NotiHandlerType,
 )
-from .services import GattDB, UUID, UUIDs
+from .services import GattDB, BleUUID, UUIDs
 
 logger = logging.getLogger(__name__)
 
-BleTarget = Tuple[Union[Pattern, BleDevice], Optional[List[UUID]]]
+BleTarget = Tuple[Union[Pattern, BleDevice], Optional[List[BleUUID]]]
 
 
 class BleClient(Generic[BleHandle, BleDevice]):
@@ -74,7 +74,7 @@ class BleClient(Generic[BleHandle, BleDevice]):
         Args:
             timeout (int, optional): How long to try connecting (in seconds) before retrying. Defaults to 10.
             retries(int, optional): How many retries to attempt before giving up. Defaults to 5
-            uuids (Type[UUIDs], optional): Service UUID's to filter on when scanning. Defaults to None.
+            uuids (Type[UUIDs], optional): Service BleUUID's to filter on when scanning. Defaults to None.
 
         Raises:
             ConnectFailed: The BLE connection was not able to establish
@@ -118,22 +118,22 @@ class BleClient(Generic[BleHandle, BleDevice]):
         else:
             logger.debug("BLE already disconnected")
 
-    def read(self, uuid: UUID) -> bytearray:
-        """Read byte data from a characteristic (identified by UUID)
+    def read(self, uuid: BleUUID) -> bytearray:
+        """Read byte data from a characteristic (identified by BleUUID)
 
         Args:
-            uuid (UUID): characteristic to read
+            uuid (BleUUID): characteristic to read
 
         Returns:
             bytearray: byte data that was read
         """
         return self._controller.read(self._handle, uuid)
 
-    def write(self, uuid: UUID, data: bytearray) -> None:
-        """Write byte data to a characteristic (identified by UUID)
+    def write(self, uuid: BleUUID, data: bytearray) -> None:
+        """Write byte data to a characteristic (identified by BleUUID)
 
         Args:
-            uuid (UUID): characteristic to write to
+            uuid (BleUUID): characteristic to write to
             data (bytearray): byte data to write
         """
         self._controller.write(self._handle, uuid, data)
@@ -188,13 +188,13 @@ class BleClient(Generic[BleHandle, BleDevice]):
         with open(dump_file, mode="w") as f:
             logger.debug(f"Dumping discovered BLE characteristics to {dump_file}")
             w = csv.writer(f, delimiter=",", quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            w.writerow(["handle", "description", "UUID", "properties", "value"])
+            w.writerow(["handle", "description", "BleUUID", "properties", "value"])
             # For each service in table
             for s in self.gatt_db.services.values():
-                w.writerow(["SERVICE", s.name, s.uuid.value, "SERVICE", "SERVICE"])
+                w.writerow(["SERVICE", s.name, s.uuid, "SERVICE", "SERVICE"])
                 # For each characteristic in service
                 for c in s.chars.values():
-                    w.writerow([c.handle, c.name, c.uuid.value, c.props, c.value])
+                    w.writerow([c.handle, c.name, c.uuid, c.props, c.value])
                     # For each descriptor in characteristic
                     for d in c.descriptors.values():
                         w.writerow([d.handle, "DESCRIPTOR", "", "", d.value])

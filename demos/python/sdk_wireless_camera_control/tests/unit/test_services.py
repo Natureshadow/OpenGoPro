@@ -5,7 +5,7 @@
 
 from typing import List, Dict
 
-from open_gopro.constants import UUID
+from open_gopro.constants import BleUUID
 from open_gopro.ble import Descriptor, Characteristic, Service, GattDB, BleClient
 
 
@@ -23,11 +23,11 @@ def test_service(service: Service):
 
 def test_attribute_table(attribute_table: GattDB):
     assert len(attribute_table.services) == 2
-    assert len(attribute_table.services[UUID.S_CONTROL_QUERY].chars) == 2
+    assert len(attribute_table.services[BleUUID.S_CONTROL_QUERY].chars) == 2
 
 
 def test_handle2uuid(attribute_table: GattDB):
-    assert attribute_table.handle2uuid(0xABCD) is UUID.CQ_QUERY
+    assert attribute_table.handle2uuid(0xABCD) is BleUUID.CQ_QUERY
 
 
 def test_services_to_csv(attribute_table: GattDB, ble_client: BleClient):

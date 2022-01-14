@@ -16,7 +16,7 @@ from open_gopro.ble import (
     DisconnectHandlerType,
     NotiHandlerType,
     BleClient,
-    UUID,
+    BleUUID,
 )
 from open_gopro.ble.client import BleTarget
 from open_gopro.wifi import WifiClient, WifiController
@@ -146,9 +146,9 @@ class GoProBle(ABC, GoProResponder, Generic[BleHandle, BleDevice]):
         raise NotImplementedError
 
     @abstractmethod
-    def _write_characteristic_receive_notification(self, uuid: UUID, data: bytearray) -> GoProResp:
+    def _write_characteristic_receive_notification(self, uuid: BleUUID, data: bytearray) -> GoProResp:
         raise NotImplementedError
 
     @abstractmethod
-    def _read_characteristic(self, uuid: UUID) -> GoProResp:
+    def _read_characteristic(self, uuid: BleUUID) -> GoProResp:
         raise NotImplementedError
