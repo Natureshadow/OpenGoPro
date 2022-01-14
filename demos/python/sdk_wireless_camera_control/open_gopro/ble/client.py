@@ -193,7 +193,7 @@ class BleClient(Generic[BleHandle, BleDevice]):
             for s in self.gatt_db.services.values():
                 w.writerow(["SERVICE", s.name, s.uuid, "SERVICE", "SERVICE"])
                 # For each characteristic in service
-                for c in s.chars.values():
+                for c in s.characteristics.values():
                     w.writerow([c.handle, c.name, c.uuid, c.props, c.value])
                     # For each descriptor in characteristic
                     for d in c.descriptors.values():

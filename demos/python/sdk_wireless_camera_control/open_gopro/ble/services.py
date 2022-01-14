@@ -10,8 +10,8 @@ import logging
 import uuid
 from pathlib import Path
 from enum import IntFlag, IntEnum
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Iterator, Generator, Mapping, Optional, Tuple, Type, no_type_check, Union
+from dataclasses import dataclass, asdict, InitVar
+from typing import Dict, Iterator, Generator, Mapping, Optional, Tuple, Type, no_type_check, Union, List
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class SpecUuidNumber(IntEnum):
 class UuidLength(IntEnum):
     """Used to specify 8-bit or 128-bit UUIDs"""
 
-    BIT_8 = 2
+    BIT_16 = 2
     BIT_128 = 16
 
 
@@ -73,7 +73,7 @@ class BleUUID(uuid.UUID):
         int: Optional[int] = None,
     ) -> None:
         self.name: str
-        if uuid_format is UuidLength.BIT_8:
+        if uuid_format is UuidLength.BIT_16:
             if [hex, bytes, bytes_le, int].count(None) != 3:
                 raise ValueError("Only one of [hex, bytes, bytes_le, int] can be set.")
             if hex:
@@ -115,35 +115,65 @@ class Descriptor:
     def __str__(self) -> str:  # pylint: disable=missing-return-doc
         return json.dumps(asdict(self), indent=4, default=str)
 
+    @property
+    def name(self) -> str:
+        """What is the human-readable name of this characteristic?
+
+        Returns:
+            str: characteristic's name
+        """
+        return self.uuid.name
+
 
 @dataclass
 class Characteristic:
     """A BLE charactersistic.
+
     Args:
         handle (int) : the handle of the attribute table that the characteristic resides at
-        descriptor_handle (int) : TODO
         uuid (BleUUID) : the BleUUID of the characteristic
         props (CharProps) : the characteristic's properties (READ, WRITE, NOTIFY, etc)
-        name (str) : the characteristic's name
         value (bytes) : the current byte stream value of the characteristic value
-        descriptors (List[Descriptor], optional) : Any relevant descriptors if they exist
+        init_descriptors (Optional[List[Descriptor]]) : Descriptors known at initialization (can also be
+            set later using the descriptors property)
+        descriptor_handle (Optional[int]) : handle of this characteristic's declaration descriptor. If not
+            passed, defaults to handle + 1
     """
 
     handle: int
-    descriptor_handle: int
     uuid: BleUUID
     props: CharProps
-    name: str = ""
     value: Optional[bytes] = None
-    descriptors: Dict[BleUUID, Descriptor] = field(default_factory=dict)
+    init_descriptors: InitVar[Optional[List[Descriptor]]] = None
+    descriptor_handle: Optional[int] = None
 
-    def __post_init__(self) -> None:
-        self.props = CharProps(int(self.props))
-        if self.uuid.name == "":
-            self.uuid.name = self.name
+    def __post_init__(self, init_descriptors: Optional[List[Descriptor]]) -> None:
+        self._descriptors: Dict[BleUUID, Descriptor] = {}
+        # Mypy should eventually support this: see https://github.com/python/mypy/issues/3004
+        self.descriptors = init_descriptors or [] # type: ignore
+        if self.descriptor_handle is None:
+            self.descriptor_handle = self.handle + 1
 
     def __str__(self) -> str:  # pylint: disable=missing-return-doc
         return f"BleUUID {str(self.uuid)} @ handle {self.handle}: {self.props}"
+
+    @property
+    def descriptors(self) -> Dict[BleUUID, Descriptor]:
+        return self._descriptors
+
+    @descriptors.setter
+    def descriptors(self, descriptors: List[Descriptor]) -> None:
+        for descriptor in descriptors:
+            self._descriptors[descriptor.uuid] = descriptor
+
+    @property
+    def name(self) -> str:
+        """What is the human-readable name of this characteristic?
+
+        Returns:
+            str: characteristic's name
+        """
+        return self.uuid.name
 
     @property
     def is_readable(self) -> bool:
@@ -152,7 +182,7 @@ class Characteristic:
         Returns:
             bool: True if readable, False if not
         """
-        return CharProps.NOTIFY in self.props
+        return CharProps.READ in self.props
 
     @property
     def is_writeable_with_response(self) -> bool:
@@ -208,7 +238,7 @@ class Characteristic:
         Returns:
             int: the CCCD handle
         """
-        return self.descriptors[UUIDs.CLIENT_CHAR_CONFIG].handle
+        return self._descriptors[UUIDs.CLIENT_CHAR_CONFIG].handle
 
 
 @dataclass
@@ -218,30 +248,52 @@ class Service:
         uuid (BleUUID) : the service's BleUUID
         start_handle(int): the attribute handle where the service begins
         end_handle(int): the attribute handle where the service ends
-        name (str) : the service's name
-        chars (Dict[str, Characteristic]) : the dictionary of characteristics, indexed by name
+        init_chars (List[Characteristic]) : list of characteristics known at service instantation. Can be set
+            later with the characteristics property
     """
 
     uuid: BleUUID
     start_handle: int
-    name: str
-    end_handle: int = 0xFFFF
-    chars: Dict[BleUUID, Characteristic] = field(default_factory=dict)
+    end_handle: int = 0xFFFF  # TODO
+    init_chars: InitVar[Optional[List[Characteristic]]] = None
 
-    def __post_init__(self) -> None:
-        if self.uuid.name == "":
-            self.uuid.name = self.name
+    def __post_init__(self, init_characteristics: Optional[List[Characteristic]]) -> None:
+        self._characteristics: Dict[BleUUID, Characteristic] = {}
+        # Mypy should eventually support this: see https://github.com/python/mypy/issues/3004
+        self.characteristics = init_characteristics or [] # type: ignore
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def characteristics(self) -> Dict[BleUUID, Characteristic]:
+        return self._characteristics
+
+    @characteristics.setter
+    def characteristics(self, characteristics: List[Characteristic]) -> None:
+        for characteristic in characteristics:
+            self._characteristics[characteristic.uuid] = characteristic
+
+    @property
+    def name(self) -> str:
+        """What is the human-readable name of this characteristic?
+
+        Returns:
+            str: characteristic's name
+        """
+        return self.uuid.name
 
 
 class GattDB:
     """The attribute table to store / look up BLE services, characteristics, and attributes.
+
     Args:
-        services (Dict[BleUUID, Service]): A dictionary of Services indexed by BleUUID.
-        characteristics (Dict[BleUUID, Characteristic]): A dictionary of Characteristics indexed by BleUUID.
+        init_services (List[Service]): A list of serices known at instantiation time. Can be updated later
+            with the services property
     """
 
     # TODO fix typing here
-    class CharacteristicView(Mapping):
+    class CharacteristicView(Mapping[BleUUID, Characteristic]):
         """Represent the GattDB mapping as characteristics indexed by BleUUID"""
 
         def __init__(self, db: "GattDB") -> None:
@@ -249,30 +301,30 @@ class GattDB:
 
         def __getitem__(self, key: BleUUID) -> Characteristic:  # pylint: disable=missing-return-doc
             for service in self._db.services.values():
-                for char in service.chars.values():
+                for char in service.characteristics.values():
                     if char.uuid == key:
                         return char
             raise KeyError
 
         def __contains__(self, key: object) -> bool:  # pylint: disable=missing-return-doc
             for service in self._db.services.values():
-                for char in service.chars.values():
+                for char in service.characteristics.values():
                     if char.uuid == key:
                         return True
             return False
 
         @no_type_check
-        def __iter__(self) -> Iterator[BleUUID]:  # pylint: disable=missing-return-doc
-            return iter(self.keys())
+        def __iter__(self) -> Iterator[Characteristic]:  # pylint: disable=missing-return-doc
+            return iter(self.values())
 
         def __len__(self) -> int:  # pylint: disable=missing-return-doc
-            return sum(len(service.chars) for service in self._db.services.values())
+            return sum(len(service.characteristics) for service in self._db.services.values())
 
         @no_type_check
         def keys(self) -> Generator[BleUUID, None, None]:  # pylint: disable=missing-return-doc
             def iter_keys():
                 for service in self._db.services.values():
-                    for ble_uuid in service.chars.keys():
+                    for ble_uuid in service.characteristics.keys():
                         yield ble_uuid
 
             return iter_keys()
@@ -281,7 +333,7 @@ class GattDB:
         def values(self) -> Generator[Characteristic, None, None]:  # pylint: disable=missing-return-doc
             def iter_values():
                 for service in self._db.services.values():
-                    for char in service.chars.values():
+                    for char in service.characteristics.values():
                         yield char
 
             return iter_values()
@@ -292,14 +344,26 @@ class GattDB:
         ) -> Generator[Tuple[BleUUID, Characteristic], None, None]:
             def iter_items():
                 for service in self._db.services.values():
-                    for ble_uuid, char in service.chars.items():
+                    for ble_uuid, char in service.characteristics.items():
                         yield (ble_uuid, char)
 
             return iter_items()
 
-    def __init__(self, services: Dict[BleUUID, Service]) -> None:
-        self.services: Dict[BleUUID, Service] = services
+    def __init__(self, init_services: List[Service]) -> None:
+        self._services: Dict[BleUUID, Service] = {}
+        # TODO add ServicesView to align with characteristics
+        # Mypy should eventually support this: see https://github.com/python/mypy/issues/3004
+        self.services = init_services  # type: ignore
         self.characteristics = self.CharacteristicView(self)
+
+    @property
+    def services(self) -> Dict[BleUUID, Service]:
+        return self._services
+
+    @services.setter
+    def services(self, services: List[Service]) -> None:
+        for service in services:
+            self._services[service.uuid] = service
 
     def handle2uuid(self, handle: int) -> BleUUID:
         """Get a BleUUID from a handle.
@@ -314,7 +378,7 @@ class GattDB:
             BleUUID: The found BleUUID
         """
         for s in self.services.values():
-            for c in s.chars.values():
+            for c in s.characteristics.values():
                 if c.handle == handle:
                     return c.uuid
         raise KeyError(f"Matching BleUUID not found for handle {handle}")
@@ -346,27 +410,26 @@ class GattDB:
 
             # For each service in table
             for service in self.services.values():
-                desc = "unknown" if service.name == "" else service.name
                 w.writerow(
                     [
                         service.start_handle,
                         SpecUuidNumber.PRIMARY_SERVICE,
                         service.uuid.hex,
-                        desc,
+                        service.name,
                         "SERVICE",
                     ]
                 )
                 # For each characteristic in service
-                for char in service.chars.values():
+                for char in service.characteristics.values():
                     w.writerow(
                         [char.descriptor_handle, SpecUuidNumber.CHAR_DECLARATION, "28:03", str(char.props), ""]
                     )
-                    description = "unknown" if char.name == "" else char.name
-                    w.writerow([char.handle, description, char.uuid.hex, "", char.value])
+                    w.writerow([char.handle, char.name, char.uuid.hex, "", char.value])
                     # For each descriptor in characteristic
                     for descriptor in char.descriptors.values():
-                        description = SpecUuidNumber(descriptor.uuid.int).name
-                        w.writerow([descriptor.handle, description, descriptor.uuid.hex, "", descriptor.value])
+                        w.writerow(
+                            [descriptor.handle, descriptor.name, descriptor.uuid.hex, "", descriptor.value]
+                        )
 
 
 class UUIDsMeta(type):
@@ -386,28 +449,28 @@ class UUIDsMeta(type):
         return x
 
     @no_type_check
-    def __getitem__(cls, key: Union[BleUUID, int, str]) -> BleUUID:  # pylint: disable=missing-return-doc
-        if isinstance(key, BleUUID):
+    def __getitem__(cls, key: Union[uuid.UUID, int, str]) -> BleUUID:  # pylint: disable=missing-return-doc
+        if isinstance(key, uuid.UUID):
             return cls._int2uuid[key.int]
         if isinstance(key, int):
             return cls._int2uuid[key]
         if isinstance(key, str):
             return cls._int2uuid[uuid.UUID(hex=key).int]
-        raise TypeError("Key must be of type  Union[BleUUID, int, str]")
+        raise TypeError("Key must be of type  Union[uuid.UUID, int, str]")
 
     @no_type_check
-    def __contains__(cls, key: Union[BleUUID, int, str]) -> bool:  # pylint: disable=missing-return-doc
-        if isinstance(key, BleUUID):
+    def __contains__(cls, key: Union[uuid.UUID, int, str]) -> bool:  # pylint: disable=missing-return-doc
+        if isinstance(key, uuid.UUID):
             return key.int in cls._int2uuid
         if isinstance(key, int):
             return key in cls._int2uuid
         if isinstance(key, str):
             return uuid.UUID(hex=key).int in cls._int2uuid
-        raise TypeError("Key must be of type  Union[BleUUID, int, str]")
+        raise TypeError("Key must be of type  Union[uuid.UUID, int, str]")
 
     @no_type_check
     def __iter__(cls):  # pylint: disable=missing-return-doc
-        for item in cls._uuids.items():
+        for item in cls._int2uuid.items():
             yield item
 
 
@@ -426,52 +489,52 @@ class UUIDs(metaclass=UUIDsMeta):
     # GATT Identifiers
     PRIMARY_SERVICE = BleUUID(
         "Primary Service",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.PRIMARY_SERVICE,
     )
     SECONDARY_SERVICE = BleUUID(
         "Secondary Service",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.SECONDARY_SERVICE,
     )
     INCLUDE = BleUUID(
         "Characteristic Include Descriptor",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.INCLUDE,
     )
     CHAR_DECLARATION = BleUUID(
         "Characteristic Declaration",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.CHAR_DECLARATION,
     )
     CHAR_EXTENDED_PROPS = BleUUID(
         "Characteristic Extended Properties",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.CHAR_EXTENDED_PROPS,
     )
     CHAR_USER_DESCR = BleUUID(
         "Characteristic User Description",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.CHAR_USER_DESCR,
     )
     CLIENT_CHAR_CONFIG = BleUUID(
         "Client Characteristic Configuration",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.CLIENT_CHAR_CONFIG,
     )
     SERVER_CHAR_CONFIG = BleUUID(
         "Server Characteristic Configuration",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.SERVER_CHAR_CONFIG,
     )
     CHAR_FORMAT = BleUUID(
         "Characteristic Format",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.CHAR_FORMAT,
     )
     CHAR_AGGREGATE_FORMAT = BleUUID(
         "Characteristic Aggregate Format",
-        uuid_format=UuidLength.BIT_8,
+        uuid_format=UuidLength.BIT_16,
         int=SpecUuidNumber.CHAR_AGGREGATE_FORMAT,
     )
 

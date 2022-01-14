@@ -12,6 +12,7 @@ from typing import Pattern, Generic, Tuple, Optional, List, Any, Type
 from dataclasses import dataclass
 
 import pytest
+from open_gopro.ble.services import CharProps
 
 from tests import versions, cameras
 from open_gopro import GoPro
@@ -24,6 +25,7 @@ from open_gopro.ble import (
     NotiHandlerType,
     GattDB,
     BleUUID,
+    UUIDs,
     Descriptor,
     Characteristic,
     Service,
@@ -106,33 +108,28 @@ async def bleak_client():
 
 
 ##############################################################################################################
-#                                             Attribute Table Unit Testing
+#                                             GATT Database Unit Testing
 ##############################################################################################################
 
 
 @pytest.fixture()
 def descriptor():
-    yield Descriptor(0xABCD, bytes([1, 2, 3, 4]))
+    yield Descriptor(0xABCD, UUIDs.CLIENT_CHAR_CONFIG)
 
 
 @pytest.fixture()
-def characteristic(descriptor):
-    d = [descriptor, descriptor]
-    yield Characteristic(
-        0xABCD, BleUUID.CQ_QUERY, ["readable", "writeable"], "test_characteristic", bytes([1, 2, 3, 4]), d
-    )
+def characteristic(descriptor: Descriptor):
+    yield Characteristic(2, UUIDs.ACC_APPEARANCE, CharProps.READ, init_descriptors=[descriptor])
 
 
 @pytest.fixture()
-def service(characteristic):
-    c = {"test_char1": characteristic, "test_char2": characteristic}
-    yield Service(BleUUID.S_CONTROL_QUERY, "test_service", c)
+def service(characteristic: Characteristic):
+    yield Service(UUIDs.S_GENERIC_ACCESS, 3, init_chars=[characteristic])
 
 
 @pytest.fixture()
-def attribute_table(service):
-    s = {BleUUID.S_CONTROL_QUERY: service, BleUUID.S_CAMERA_MANAGEMENT: service}
-    yield GattDB(s)
+def gatt_db(service: Service):
+    yield GattDB([service])
 
 
 ##############################################################################################################
