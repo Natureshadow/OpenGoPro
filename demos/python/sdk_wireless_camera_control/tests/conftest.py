@@ -146,7 +146,7 @@ class GattTable:
 class BleControllerTest(BLEController, Generic[BleHandle, BleDevice]):
     # pylint: disable=signature-differs
 
-    def scan(self, token: Pattern, timeout: int) -> str:
+    def scan(self, token: Pattern, timeout: int, service_uuids: List[BleUUID] = None) -> str:
         if token == re.compile("device"):
             return "scanned_device"
         raise FailedToFindDevice
@@ -168,7 +168,7 @@ class BleControllerTest(BLEController, Generic[BleHandle, BleDevice]):
     def enable_notifications(self, handle: BleHandle, handler: NotiHandlerType) -> None:
         return
 
-    def discover_chars(self, handle: BleHandle) -> GattTable:
+    def discover_chars(self, handle: BleHandle, service_uuids: List[BleUUID] = None) -> GattTable:
         return GattTable()
 
     def disconnect(self, handle: BleHandle) -> None:
@@ -189,7 +189,7 @@ async def ble_client():
         controller=BleControllerTest(),
         disconnected_cb=disconnection_handler,
         notification_cb=notification_handler,
-        target=re.compile("device"),
+        target=(re.compile("device"), []),
     )
     yield test_client
 
@@ -212,13 +212,16 @@ class BleCommunicatorTest(GoProBle):
     def get_update(self, timeout: float) -> int:
         return 1
 
-    def _write_characteristic_receive_notification(
-        self, uuid: BleUUID, data: bytearray
-    ) -> Tuple[BleUUID, bytearray]:
-        return uuid, data
+    def _write_characteristic_receive_notification(self, uuid: BleUUID, data: bytearray) -> GoProResp:
+        response = good_response
+        response._info = [uuid]
+        response._raw_packet = data
+        return response
 
-    def _read_characteristic(self, uuid: BleUUID) -> BleUUID:
-        return uuid
+    def _read_characteristic(self, uuid: BleUUID) -> GoProResp:
+        response = good_response
+        response._info = [uuid]
+        return response
 
     @property
     def ble_command(self) -> BleCommands:
@@ -430,7 +433,7 @@ class GoProTestMaintainBle(GoPro):
 
     def _open_ble(self, timeout: int, retries: int) -> None:
         super()._open_ble(timeout=timeout, retries=retries)
-        self._ble._gatt_table.handle2uuid = lambda *args: BleUUID.CQ_QUERY_RESP
+        self._ble._gatt_table.handle2uuid = lambda *args: GoProUUIDs.CQ_QUERY_RESP
 
     def _test_return_version(self) -> FlattenPatch:
         return FlattenPatch(Version(*[int(x) for x in self._test_version.split(".")]))

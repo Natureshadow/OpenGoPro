@@ -102,6 +102,7 @@ class BleUUID(uuid.UUID):
 @dataclass
 class Descriptor:
     """A charactersistic descriptor.
+
     Args:
         handle (int) : the handle of the attribute table that the descriptor resides at
         uuid (BleUUID): BleUUID of this descriptor
@@ -150,7 +151,7 @@ class Characteristic:
     def __post_init__(self, init_descriptors: Optional[List[Descriptor]]) -> None:
         self._descriptors: Dict[BleUUID, Descriptor] = {}
         # Mypy should eventually support this: see https://github.com/python/mypy/issues/3004
-        self.descriptors = init_descriptors or [] # type: ignore
+        self.descriptors = init_descriptors or []  # type: ignore
         if self.descriptor_handle is None:
             self.descriptor_handle = self.handle + 1
 
@@ -159,6 +160,11 @@ class Characteristic:
 
     @property
     def descriptors(self) -> Dict[BleUUID, Descriptor]:
+        """Return uuid-to-descriptor mapping
+
+        Returns:
+            Dict[BleUUID, Descriptor]: dictionary of descriptors indexed by BleUUID
+        """
         return self._descriptors
 
     @descriptors.setter
@@ -244,6 +250,7 @@ class Characteristic:
 @dataclass
 class Service:
     """A BLE service or grouping of Characteristics.
+
     Args:
         uuid (BleUUID) : the service's BleUUID
         start_handle(int): the attribute handle where the service begins
@@ -260,13 +267,18 @@ class Service:
     def __post_init__(self, init_characteristics: Optional[List[Characteristic]]) -> None:
         self._characteristics: Dict[BleUUID, Characteristic] = {}
         # Mypy should eventually support this: see https://github.com/python/mypy/issues/3004
-        self.characteristics = init_characteristics or [] # type: ignore
+        self.characteristics = init_characteristics or []  # type: ignore
 
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # pylint: disable=missing-return-doc
         return self.name
 
     @property
     def characteristics(self) -> Dict[BleUUID, Characteristic]:
+        """Return uuid-to-characteristic mapping
+
+        Returns:
+            Dict[BleUUID, Characteristic]: Dict of characteristics indexed by uuid
+        """
         return self._characteristics
 
     @characteristics.setter
@@ -322,6 +334,8 @@ class GattDB:
 
         @no_type_check
         def keys(self) -> Generator[BleUUID, None, None]:  # pylint: disable=missing-return-doc
+            """Return the UUID's"""
+
             def iter_keys():
                 for service in self._db.services.values():
                     for ble_uuid in service.characteristics.keys():
@@ -331,6 +345,8 @@ class GattDB:
 
         @no_type_check
         def values(self) -> Generator[Characteristic, None, None]:  # pylint: disable=missing-return-doc
+            """Return the characteristics"""
+
             def iter_values():
                 for service in self._db.services.values():
                     for char in service.characteristics.values():
@@ -342,6 +358,8 @@ class GattDB:
         def items(  # pylint: disable=missing-return-doc
             self,
         ) -> Generator[Tuple[BleUUID, Characteristic], None, None]:
+            """Return tuples of (uuid, characteristic)"""
+
             def iter_items():
                 for service in self._db.services.values():
                     for ble_uuid, char in service.characteristics.items():
@@ -358,6 +376,11 @@ class GattDB:
 
     @property
     def services(self) -> Dict[BleUUID, Service]:
+        """Return uuid-to-service mapping
+
+        Returns:
+            Dict[BleUUID, Service]: Dict of services indexed by uuid
+        """
         return self._services
 
     @services.setter
@@ -399,6 +422,7 @@ class GattDB:
 
     def dump_to_csv(self, file: Path = Path("attributes.csv")) -> None:
         """Dump discovered services to a csv file.
+
         Args:
             file (Path, optional): File to write to. Defaults to "./attributes.csv".
         """
@@ -439,7 +463,8 @@ class UUIDsMeta(type):
     """
 
     @no_type_check
-    def __new__(cls, name, bases, dct) -> UUIDsMeta:  # pylint: disable=missing-return-doc
+    # pylint: disable=missing-return-doc
+    def __new__(cls, name, bases, dct) -> UUIDsMeta:  # noqa
         x = super().__new__(cls, name, bases, dct)
         x._int2uuid = {}
         for _, ble_uuid in [(k, v) for k, v in dct.items() if not k.startswith("__")]:
@@ -479,11 +504,10 @@ class UUIDs(metaclass=UUIDsMeta):
     """BLE Spec-defined UUIDs that are common across all applications.
 
     Also functions as a dict to look up UUID's by str, int, or BleUUID
-
     """
 
     @no_type_check
-    def __new__(cls: Type[UUIDs]) -> Type[UUIDs]:
+    def __new__(cls: Type[UUIDs]) -> Type[UUIDs]:  # noqa
         raise Exception("This class shall not be instantiated")
 
     # GATT Identifiers
