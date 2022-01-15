@@ -40,6 +40,21 @@ bleak_props_to_enum = {
 }
 
 
+def uuid2bleak_string(uuid: BleUUID) -> str:
+    """Convert a BleUUID object to a string representation to appease bleak
+
+    Bleak identifies UUID's by str(). Since BleUUID has overridden that method, we manually convert to the
+    string representation that bleak expects.
+
+    Args:
+        uuid (BleUUID): uuid to convert
+
+    Returns:
+        str: bleakful string representation
+    """
+    return f"{uuid.hex[:8]}-{uuid.hex[8:12]}-{uuid.hex[12:16]}-{uuid.hex[16:20]}-{uuid.hex[20:]}"
+
+
 class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton):
     """Wrapper around bleak to manage a Bluetooth connection.
 
@@ -92,7 +107,7 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
 
         async def _async_read() -> bytearray:  # pylint: disable=missing-return-doc
             logger.debug(f"Reading from {uuid}")
-            response = await handle.read_gatt_char(uuid.hex)
+            response = await handle.read_gatt_char(uuid2bleak_string(uuid))
             logger.debug(f'Received response on BleUUID [{uuid}]: {response.hex( ":")}')
             return response
 
@@ -108,11 +123,9 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
         """
 
         async def _async_write() -> None:
-            bleak_uuid = uuid.hex
-            bleak_uuid = f"{bleak_uuid[:8]}-{bleak_uuid[8:12]}-{bleak_uuid[12:16]}-{bleak_uuid[16:20]}-{bleak_uuid[20:]}"
-            logger.debug(f"Writing to {uuid}: {data.hex(':')}")
+            logger.debug(f"Writing to {uuid}: {uuid.hex}")
             # TODO make with / without response configurable
-            await handle.write_gatt_char(bleak_uuid, data, response=True)
+            await handle.write_gatt_char(uuid2bleak_string(uuid), data, response=True)
 
         self._as_coroutine(_async_write)
 
@@ -284,7 +297,11 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
             logger.info("Discovering characteristics...")
             services: List[Service] = []
             for service in handle.services:
-                service_uuid = uuids[service.uuid] if uuids else BleUUID(service.description, hex=service.uuid)
+                service_uuid = (
+                    uuids[service.uuid]
+                    if uuids and service.uuid in uuids
+                    else BleUUID(service.description, hex=service.uuid)
+                )
                 logger.debug(f"[Service] {service_uuid}")
 
                 # Loop over all chars in service
@@ -320,6 +337,7 @@ class BleakWrapperController(BLEController[BleakDevice, BleakClient], Singleton)
                             init_descriptors=descriptors,
                         )
                     )
+                    logger.debug(f"\t[Characteristic] {chars[-1]}")
 
                 # Create new service
                 services.append(Service(uuid=service_uuid, start_handle=service.handle, init_chars=chars))

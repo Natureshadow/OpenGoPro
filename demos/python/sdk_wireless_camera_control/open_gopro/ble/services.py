@@ -15,6 +15,8 @@ from typing import Dict, Iterator, Generator, Mapping, Optional, Tuple, Type, no
 
 logger = logging.getLogger(__name__)
 
+BLE_BASE_UUID = "0000{}-0000-1000-8000-00805F9B34FB"
+
 
 class CharProps(IntFlag):
     """BLE Spec-Defined Characteristic Property bitmask values"""
@@ -60,8 +62,6 @@ class BleUUID(uuid.UUID):
     A extension of the standard UUID to associate a string name with the UUID and allow 8-bit UUID input
     """
 
-    BASE_UUID = "0000{}-0000-1000-8000-00805F9B34FB"
-
     # pylint: disable=redefined-builtin
     def __init__(
         self,
@@ -79,15 +79,15 @@ class BleUUID(uuid.UUID):
             if hex:
                 if len(hex) != 4:
                     raise ValueError("badly formed 8-bit hexadecimal UUID string")
-                hex = BleUUID.BASE_UUID.format(hex)
+                hex = BLE_BASE_UUID.format(hex)
             elif bytes:
                 if len(bytes) != 2:
                     raise ValueError("badly formed 8-bit byte input")
-                bytes = uuid.UUID(hex=BleUUID.BASE_UUID.format(bytes.hex())).bytes
+                bytes = uuid.UUID(hex=BLE_BASE_UUID.format(bytes.hex())).bytes
             elif bytes_le:
                 raise ValueError("byte_le not possible with 8-bit UUID")
             elif int:
-                int = uuid.UUID(hex=BleUUID.BASE_UUID.format(int.to_bytes(2, "big").hex())).int
+                int = uuid.UUID(hex=BLE_BASE_UUID.format(int.to_bytes(2, "big").hex())).int
 
         object.__setattr__(self, "name", name)  # needed to work around immutability in base class
         super().__init__(hex=hex, bytes=bytes, bytes_le=bytes_le, int=int)
@@ -156,7 +156,7 @@ class Characteristic:
             self.descriptor_handle = self.handle + 1
 
     def __str__(self) -> str:  # pylint: disable=missing-return-doc
-        return f"BleUUID {str(self.uuid)} @ handle {self.handle}: {self.props}"
+        return f"{self.name} @ handle {self.handle}: {self.props.name}"
 
     @property
     def descriptors(self) -> Dict[BleUUID, Descriptor]:
@@ -467,10 +467,11 @@ class UUIDsMeta(type):
     def __new__(cls, name, bases, dct) -> UUIDsMeta:  # noqa
         x = super().__new__(cls, name, bases, dct)
         x._int2uuid = {}
-        for _, ble_uuid in [(k, v) for k, v in dct.items() if not k.startswith("__")]:
-            if not isinstance(ble_uuid, BleUUID):
-                raise TypeError("This class can only be composed of BleUUID attributes")
-            x._int2uuid[ble_uuid.int] = ble_uuid
+        for db in [*[base.__dict__ for base in bases], dct]:
+            for _, ble_uuid in [(k, v) for k, v in db.items() if not k.startswith("_")]:
+                if not isinstance(ble_uuid, BleUUID):
+                    raise TypeError("This class can only be composed of BleUUID attributes")
+                x._int2uuid[ble_uuid.int] = ble_uuid
         return x
 
     @no_type_check
@@ -481,7 +482,7 @@ class UUIDsMeta(type):
             return cls._int2uuid[key]
         if isinstance(key, str):
             return cls._int2uuid[uuid.UUID(hex=key).int]
-        raise TypeError("Key must be of type  Union[uuid.UUID, int, str]")
+        raise TypeError("Key must be of type Union[uuid.UUID, int, str]")
 
     @no_type_check
     def __contains__(cls, key: Union[uuid.UUID, int, str]) -> bool:  # pylint: disable=missing-return-doc
@@ -490,8 +491,9 @@ class UUIDsMeta(type):
         if isinstance(key, int):
             return key in cls._int2uuid
         if isinstance(key, str):
+            # Built uuid.UUID to use it's normalizing
             return uuid.UUID(hex=key).int in cls._int2uuid
-        raise TypeError("Key must be of type  Union[uuid.UUID, int, str]")
+        raise TypeError("Key must be of type Union[uuid.UUID, int, str]")
 
     @no_type_check
     def __iter__(cls):  # pylint: disable=missing-return-doc
@@ -563,33 +565,31 @@ class UUIDs(metaclass=UUIDsMeta):
     )
 
     # Generic Attribute Service
-    S_GENERIC_ATT = BleUUID("Generic Attribute Service", hex="00001801-0000-1000-8000-00805f9b34fb")
+    S_GENERIC_ATT = BleUUID("Generic Attribute Service", hex=BLE_BASE_UUID.format("1801"))
 
     # Generic Access Service
-    S_GENERIC_ACCESS = BleUUID("Generic Access Service", hex="00001800-0000-1000-8000-00805f9b34fb")
-    ACC_DEVICE_NAME = BleUUID("Device Name", hex="00002a00-0000-1000-8000-00805f9b34fb")
-    ACC_APPEARANCE = BleUUID("Appearance", hex="00002a01-0000-1000-8000-00805f9b34fb")
-    ACC_PREF_CONN_PARAMS = BleUUID(
-        "Peripheral Preferred Connection Parameters", hex="00002a04-0000-1000-8000-00805f9b34fb"
-    )
-    ACC_CENTRAL_ADDR_RES = BleUUID("Central Address Resolution", hex="00002aa6-0000-1000-8000-00805f9b34fb")
+    S_GENERIC_ACCESS = BleUUID("Generic Access Service", hex=BLE_BASE_UUID.format("1800"))
+    ACC_DEVICE_NAME = BleUUID("Device Name", hex=BLE_BASE_UUID.format("2a00"))
+    ACC_APPEARANCE = BleUUID("Appearance", hex=BLE_BASE_UUID.format("2a01"))
+    ACC_PREF_CONN_PARAMS = BleUUID("Preferred Connection Parameters", hex=BLE_BASE_UUID.format("2a04"))
+    ACC_CENTRAL_ADDR_RES = BleUUID("Central Address Resolution", hex=BLE_BASE_UUID.format("2aa6"))
 
     # Tx Power
-    S_TX_POWER = BleUUID("Tx Power Service", hex="00001804-0000-1000-8000-00805f9b34fb")
-    TX_POWER_LEVEL = BleUUID("Tx Power Level", hex="00002a07-0000-1000-8000-00805f9b34fb")
+    S_TX_POWER = BleUUID("Tx Power Service", hex=BLE_BASE_UUID.format("1804"))
+    TX_POWER_LEVEL = BleUUID("Tx Power Level", hex=BLE_BASE_UUID.format("2a07"))
 
     # Battery Service
-    S_BATTERY = BleUUID("Battery Service", hex="0000180f-0000-1000-8000-00805f9b34fb")
-    BATT_LEVEL = BleUUID("Battery Level", hex="00002a19-0000-1000-8000-00805f9b34fb")
+    S_BATTERY = BleUUID("Battery Service", hex=BLE_BASE_UUID.format("180f"))
+    BATT_LEVEL = BleUUID("Battery Level", hex=BLE_BASE_UUID.format("2a19"))
 
     # Device Information Service
-    S_DEV_INFO = BleUUID("Device Information Service", hex="0000180a-0000-1000-8000-00805f9b34fb")
-    INF_MAN_NAME = BleUUID("Manufacturer Name", hex="00002a29-0000-1000-8000-00805f9b34fb")
-    INF_MODEL_NUM = BleUUID("Model Number", hex="00002a24-0000-1000-8000-00805f9b34fb")
-    INF_SERIAL_NUM = BleUUID("Serial Number", hex="00002a25-0000-1000-8000-00805f9b34fb")
-    INF_FW_REV = BleUUID("Firmware Revision", hex="00002a26-0000-1000-8000-00805f9b34fb")
-    INF_HW_REV = BleUUID("Hardware Revision", hex="00002a27-0000-1000-8000-00805f9b34fb")
-    INF_SW_REV = BleUUID("Software Revision", hex="00002a28-0000-1000-8000-00805f9b34fb")
-    INF_SYS_ID = BleUUID("System ID", hex="00002a23-0000-1000-8000-00805f9b34fb")
-    INF_CERT_DATA = BleUUID("Certification Data", hex="00002a2a-0000-1000-8000-00805f9b34fb")
-    INF_PNP_ID = BleUUID("PNP ID", hex="00002a50-0000-1000-8000-00805f9b34fb")
+    S_DEV_INFO = BleUUID("Device Information Service", hex=BLE_BASE_UUID.format("180a"))
+    INF_MAN_NAME = BleUUID("Manufacturer Name", hex=BLE_BASE_UUID.format("2a29"))
+    INF_MODEL_NUM = BleUUID("Model Number", hex=BLE_BASE_UUID.format("2a24"))
+    INF_SERIAL_NUM = BleUUID("Serial Number", hex=BLE_BASE_UUID.format("2a25"))
+    INF_FW_REV = BleUUID("Firmware Revision", hex=BLE_BASE_UUID.format("2a26"))
+    INF_HW_REV = BleUUID("Hardware Revision", hex=BLE_BASE_UUID.format("2a27"))
+    INF_SW_REV = BleUUID("Software Revision", hex=BLE_BASE_UUID.format("2a28"))
+    INF_SYS_ID = BleUUID("System ID", hex=BLE_BASE_UUID.format("2a23"))
+    INF_CERT_DATA = BleUUID("Certification Data", hex=BLE_BASE_UUID.format("2a2a"))
+    INF_PNP_ID = BleUUID("PNP ID", hex=BLE_BASE_UUID.format("2a50"))

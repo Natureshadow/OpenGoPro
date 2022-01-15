@@ -8,9 +8,9 @@ from typing import List, Dict
 
 import pytest
 
-from open_gopro.ble.services import UUIDs, UuidLength
+from open_gopro.ble.services import UUIDs, UUIDsMeta, UuidLength, BLE_BASE_UUID
 from open_gopro.constants import BleUUID
-from open_gopro.ble import Descriptor, Characteristic, Service, GattDB, BleClient, BleUUID
+from open_gopro.ble import Descriptor, Characteristic, Service, GattDB, BleUUID
 from tests.conftest import gatt_db
 
 
@@ -52,11 +52,11 @@ def test_ble_uuids():
     UUID_STR = "00001801-0000-1000-8000-00805f9b34fb"
     UUID_INT = 486857058725721441610830112830715
 
-    class TestUUIDs(UUIDs):
+    class TestUUIDs(metaclass=UUIDsMeta):
         TEST_UUID = BleUUID("Test", hex=UUID_STR)
 
     assert UUID_STR in TestUUIDs
-    assert BleUUID.BASE_UUID.format("ABCD") not in TestUUIDs
+    assert BLE_BASE_UUID.format("ABCD") not in TestUUIDs
     assert UUID_INT in TestUUIDs
     assert 0xABCD not in TestUUIDs
     assert TestUUIDs.TEST_UUID in TestUUIDs

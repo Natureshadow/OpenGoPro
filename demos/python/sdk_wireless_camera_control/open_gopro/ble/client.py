@@ -38,6 +38,20 @@ class BleClient(Generic[BleHandle, BleDevice]):
         target: Tuple[Union[Pattern, BleDevice], Optional[List[BleUUID]]],
         uuids: Type[UUIDs] = None,
     ) -> None:
+        """TODO
+
+        Args:
+            controller (BLEController): controller implementation to use for this client
+            disconnected_cb (DisconnectHandlerType): disconnected callback
+            notification_cb (NotiHandlerType): notification callback
+            target (Tuple[Union[Pattern, BleDevice], Optional[List[BleUUID]]]): Tuple of (device, service_uuids)
+                where device is the BleDevice (or regex) to connect to and service_uuids is a list of
+                service uuid's to filter for
+            uuids (Type[UUIDs], optional): Additional . Defaults to None. TODO
+
+        Raises:
+            ValueError: TODO
+        """
         if target is None:
             raise ValueError("Target can not be None!")
         if isinstance(target[0], str):

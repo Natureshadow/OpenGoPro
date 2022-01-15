@@ -115,6 +115,7 @@ class GoProBle(ABC, GoProResponder, Generic[BleHandle, BleDevice]):
             disconnected_cb,
             notification_cb,
             (re.compile(r"GoPro [A-Z0-9]{4}") if target is None else target, [GoProUUIDs.S_CONTROL_QUERY]),
+            uuids=GoProUUIDs,
         )
 
     @abstractmethod
